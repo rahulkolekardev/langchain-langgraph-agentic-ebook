@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Phase 4 – Advanced Agentic Systems</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Phase 4 – Advanced Agentic Systems</h1>
+        <p class="tagline">
+          Design powerful, safe, and scalable agentic systems using LangChain and LangGraph.
+        </p>
+      </div>
+      <div class="header-controls">
+        <input
+          id="global-search"
+          type="search"
+          placeholder="Search headings in this chapter…"
+          aria-label="Search headings in this chapter"
+        />
+        <button type="button" class="theme-toggle" id="theme-toggle">
+          Toggle dark mode
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Chapters navigation">
+        <h2>Chapters</h2>
+        <ol>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="phase0.html">Phase 0 – Prerequisites &amp; Setup</a></li>
+          <li><a href="phase1.html">Phase 1 – LangChain Core &amp; LCEL</a></li>
+          <li><a href="phase2.html">Phase 2 – LangGraph Fundamentals</a></li>
+          <li><a href="phase3.html">Phase 3 – Applications &amp; Advanced</a></li>
+          <li><a href="phase4.html">Phase 4 – Advanced Agentic Systems</a></li>
+        </ol>
+      </nav>
+
+      <section class="content">
+        <article>
+          <h1>Overview</h1>
+          <p>
+            This phase assumes you are comfortable with basic LangChain agents and LangGraph workflows.
+            You now focus on <strong>advanced agentic patterns</strong>: richer reasoning, hierarchical planning,
+            multimodal and code-execution tools, long-term memory, safety &amp; governance, and scalable multi-agent systems.
+          </p>
+
+          <div class="toc">
+            <h3>Modules in this Phase</h3>
+            <ul>
+              <li><a href="#module10">Module 10 – Advanced Agent Reasoning Patterns</a></li>
+              <li><a href="#module11">Module 11 – Planning &amp; Hierarchical Agents</a></li>
+              <li><a href="#module12">Module 12 – Advanced Tools, Multimodal &amp; Code Agents</a></li>
+              <li><a href="#module13">Module 13 – Memory, Safety, Governance &amp; Evaluation</a></li>
+              <li><a href="#module14">Module 14 – Multi-Agent Coordination &amp; Scalable Deployment</a></li>
+            </ul>
+          </div>
+
+          <!-- Module 10 -->
+          <h2 id="module10">Module 10 – Advanced Agent Reasoning Patterns</h2>
+          <p>
+            This module moves beyond simple “ask a model, maybe call a tool” agents into richer
+            reasoning patterns such as ReAct, reflexion, and multi-branch reasoning.
+          </p>
+
+          <h3>10.1 ReAct-style Agents (Reason + Act)</h3>
+          <p>
+            <strong>ReAct</strong> (Reason + Act) is a pattern where the model explicitly emits:
+          </p>
+          <ul>
+            <li>a <em>Thought</em> – natural language reasoning, and</li>
+            <li>an <em>Action</em> – which tool to call (with arguments).</li>
+          </ul>
+          <p>
+            A simple ReAct loop can be implemented in LangChain with a prompt that encourages this structure:
+          </p>
+          <pre><code class="language-python"># src/phase4/react_agent.py
+from typing import List, Tuple
+import re
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+
+
+@tool
+def search_notes(query: str) -> str:
+    """Search the course notes for information related to the query (placeholder)."""
+    # In a real app, call your RAG pipeline instead.
+    return f"[Search results for: {query}]"
+
+
+TOOLS = {
+    "search_notes": search_notes,
+}
+
+
+def parse_react_output(text: str) -> Tuple[str, str, str]:
+    """
+    Parse a simple ReAct style output of the form:
+      Thought: ...
+      Action: search_notes["query"]
+    """
+    thought_match = re.search(r"Thought:(.*)", text, re.DOTALL)
+    action_match = re.search(r"Action:\s*(\w+)\[(.*)\]", text)
+
+    thought = thought_match.group(1).strip() if thought_match else ""
+    if not action_match:
+        return thought, "", ""
+    tool_name = action_match.group(1).strip()
+    arg = action_match.group(2).strip().strip('"').strip("'")
+    return thought, tool_name, arg
+
+
+def run_react_loop(question: str, max_steps: int = 3) -> str:
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+
+    history: List[str] = []
+    observations: List[str] = []
+
+    for step in range(max_steps):
+        prompt = (
+            "You are a ReAct agent. Use Thought/Action/Observation steps. "
+            "You have a tool: search_notes[query].\n\n"
+            f"Question: {question}\n\n"
+        )
+        if observations:
+            prompt += "Previous observations:\n" + "\n".join(observations) + "\n\n"
+
+        prompt += (
+            "Respond strictly in this format:\n"
+            "Thought: &lt;your reasoning&gt;\n"
+            "Action: tool_name[\"argument\"] OR Action: finish[\"final answer\"]\n"
+        )
+
+        response = llm.invoke(prompt)
+        text = response.content
+        history.append(text)
+
+        thought, tool_name, arg = parse_react_output(text)
+        if tool_name == "finish":
+            return arg  # final answer
+
+        tool = TOOLS.get(tool_name)
+        if not tool:
+            observations.append(f"Observation: Unknown tool '{tool_name}'.")
+            continue
+
+        tool_result = tool.invoke({"query": arg})
+        observations.append(f"Observation: {tool_result}")
+
+    # If loop ended without finish, summarize best effort
+    return "I could not fully answer within the step limit. Partial reasoning:\n" + "\n".join(history)</code></pre>
+
+          <p>
+            This example shows the core idea: the model emits a structured “Thought” and “Action” block; your code parses
+            it, calls tools, and feeds observations back in the next step.
+          </p>
+
+          <h3>10.2 Reflexion / Self-Critique Loop</h3>
+          <p>
+            <strong>Reflexion</strong> patterns add a meta-step where the agent critiques its own answers and revises them.
+            You can implement this with a follow-up prompt that asks the model to evaluate and refine its own output.
+          </p>
+          <pre><code class="language-python"># src/phase4/reflexion.py
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+
+
+def answer_and_reflect(question: str) -> str:
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.5)
+
+    # Step 1: initial answer
+    base_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a helpful assistant."),
+            ("human", "{question}"),
+        ]
+    )
+    base_chain = base_prompt | llm | StrOutputParser()
+    draft = base_chain.invoke({"question": question})
+
+    # Step 2: critique and revise
+    reflexion_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a strict reviewer. Check the answer for correctness, missing details, "
+                "and hallucinations. Then rewrite a final, improved answer.",
+            ),
+            (
+                "human",
+                "Question:\n{question}\n\nDraft answer:\n{draft}\n\n"
+                "First, list potential issues. Then provide a corrected final answer.",
+            ),
+        ]
+    )
+    reflexion_chain = reflexion_prompt | llm | StrOutputParser()
+    final_answer = reflexion_chain.invoke({"question": question, "draft": draft})
+    return final_answer</code></pre>
+
+          <h3>10.3 Multi-Branch / Tree-of-Thought-style Reasoning</h3>
+          <p>
+            In more complex tasks, you may want the model to generate multiple candidate solutions (“branches”),
+            score them, and pick the best. A light-weight approach:
+          </p>
+          <ol>
+            <li>Ask the model to generate N reasoning paths.</li>
+            <li>Ask it (or another model) to score each path.</li>
+            <li>Pick the highest-scoring final answer.</li>
+          </ol>
+          <pre><code class="language-python"># src/phase4/multi_branch.py
+from typing import List
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+
+def generate_branches(question: str, n: int = 3) -> List[str]:
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "Generate multiple different reasoning paths to solve the problem.",
+            ),
+            (
+                "human",
+                "Question: {question}\n\nGenerate {n} distinct candidate answers with detailed reasoning, "
+                "labeled as 'Candidate 1', 'Candidate 2', etc.",
+            ),
+        ]
+    )
+    chain = prompt | llm | StrOutputParser()
+    text = chain.invoke({"question": question, "n": n})
+    # For teaching purposes, we return the raw response; in production, parse each candidate explicitly.
+    return [text]
+
+
+def score_and_select(question: str, candidates: List[str]) -> str:
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+    scoring_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a grader. Evaluate candidate answers and pick the best one.",
+            ),
+            (
+                "human",
+                "Question:\n{question}\n\nCandidates:\n{candidates}\n\n"
+                "Choose the best candidate and explain briefly why.",
+            ),
+        ]
+    )
+    chain = scoring_prompt | llm | StrOutputParser()
+    return chain.invoke({"question": question, "candidates": "\n\n".join(candidates)})</code></pre>
+
+          <!-- Module 11 -->
+          <h2 id="module11">Module 11 – Planning &amp; Hierarchical Agents</h2>
+          <p>
+            Planning agents separate <em>planning</em> (deciding what to do) from <em>execution</em> (doing it).
+            This structure makes complex tasks more reliable and inspectable.
+          </p>
+
+          <h3>11.1 Plan-and-Execute Pattern</h3>
+          <p>
+            A Plan-and-Execute agent typically involves:
+          </p>
+          <ul>
+            <li>A <strong>planner</strong> that converts a high-level goal into a list of steps.</li>
+            <li>An <strong>executor</strong> that executes steps using tools, RAG, or other agents.</li>
+          </ul>
+          <pre><code class="language-python"># src/phase4/plan_and_execute.py
+from typing import List
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+
+def build_llm():
+    return ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+
+
+def plan_steps(goal: str) -> List[str]:
+    llm = build_llm()
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a planner. Break the goal into 3-7 concrete steps."),
+            ("human", "{goal}"),
+        ]
+    )
+    chain = prompt | llm | StrOutputParser()
+    raw_plan = chain.invoke({"goal": goal})
+    steps: List[str] = []
+    for line in raw_plan.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if "." in line:
+            line = line.split(".", 1)[1].strip()
+        steps.append(line)
+    return steps
+
+
+def execute_step(step: str) -> str:
+    llm = build_llm()
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are an executor. Perform the step and report results clearly."),
+            ("human", "Step: {step}"),
+        ]
+    )
+    chain = prompt | llm | StrOutputParser()
+    return chain.invoke({"step": step})
+
+
+def plan_and_execute(goal: str) -> str:
+    load_dotenv()
+    steps = plan_steps(goal)
+    reports = []
+    for i, step in enumerate(steps, start=1):
+        result = execute_step(step)
+        reports.append(f"Step {i}: {step}\nResult:\n{result}")
+    return "\n\n".join(reports)</code></pre>
+
+          <h3>11.2 Wrapping Planner &amp; Executor in LangGraph</h3>
+          <p>
+            You can wrap this pattern in a LangGraph to track state and allow dynamic replanning:
+          </p>
+          <pre><code class="language-python"># src/phase4/plan_graph.py
+from typing import TypedDict, List
+from langgraph.graph import StateGraph
+from plan_and_execute import plan_steps, execute_step
+
+
+class PlanState(TypedDict, total=False):
+    goal: str
+    steps: List[str]
+    current_index: int
+    reports: List[str]
+
+
+def node_plan(state: PlanState) -> PlanState:
+    steps = plan_steps(state["goal"])
+    return {"steps": steps, "current_index": 0, "reports": []}
+
+
+def node_execute(state: PlanState) -> PlanState:
+    idx = state.get("current_index", 0)
+    steps = state["steps"]
+    if idx >= len(steps):
+        return {}
+    step = steps[idx]
+    result = execute_step(step)
+    reports = state.get("reports", [])
+    reports.append(f"{step}\nResult:\n{result}")
+    return {"reports": reports, "current_index": idx + 1}
+
+
+def node_decide_next(state: PlanState) -> str:
+    if state.get("current_index", 0) &lt; len(state.get("steps", [])):
+        return "execute"
+    return "finish"
+
+
+def build_plan_graph():
+    workflow = StateGraph(PlanState)
+    workflow.add_node("plan", node_plan)
+    workflow.add_node("execute", node_execute)
+    workflow.add_node("decider", node_decide_next)
+
+    workflow.set_entry_point("plan")
+    workflow.add_edge("plan", "execute")
+    workflow.add_edge("execute", "decider")
+
+    workflow.add_conditional_edges(
+        "decider",
+        node_decide_next,
+        {
+            "execute": "execute",
+            "finish": "__end__",  # special END label; actual API may differ
+        },
+    )
+
+    return workflow.compile()</code></pre>
+
+          <div class="note">
+            Check the latest LangGraph docs for the exact constant representing the end node (often <code>END</code>).
+            The pattern above is what matters: a planner node, an executor node, and a decision node that loops.
+          </div>
+
+          <!-- Module 12 -->
+          <h2 id="module12">Module 12 – Advanced Tools, Multimodal &amp; Code Agents</h2>
+          <p>
+            In this module you extend agents with richer tools: multiple tool pipelines, multimodal tools, and
+            code/DB execution tools.
+          </p>
+
+          <h3>12.1 Dynamic Toolsets &amp; Tool Pipelines</h3>
+          <p>
+            As your application grows, you may have many tools. You can dynamically choose which tools to expose
+            based on user, environment, or state.
+          </p>
+          <pre><code class="language-python"># src/phase4/dynamic_tools.py
+from typing import List
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+
+
+@tool
+def web_search(query: str) -> str:
+    """Search the web for the given query (placeholder)."""
+    return f"[Web search results for: {query}]"
+
+
+@tool
+def summarize_text(text: str) -> str:
+    """Summarize a long piece of text."""
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    return llm.invoke(f"Summarize this:\n\n{text}").content
+
+
+def build_agent_for_mode(mode: str) -> AgentExecutor:
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    base_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a versatile assistant that can use tools."),
+            ("human", "{input}"),
+        ]
+    )
+
+    if mode == "research":
+        tools = [web_search, summarize_text]
+    else:
+        tools = [summarize_text]
+
+    agent = create_tool_calling_agent(llm, tools, base_prompt)
+    return AgentExecutor(agent=agent, tools=tools, verbose=True)</code></pre>
+
+          <h3>12.2 Multimodal Tools (Images, Documents)</h3>
+          <p>
+            Many modern models can see images and PDFs. In LangChain, you typically:
+          </p>
+          <ul>
+            <li>Implement a tool that accepts an image path or bytes.</li>
+            <li>Use a multimodal-capable model under the hood.</li>
+          </ul>
+          <p>
+            A sketch of an “analyze image” tool (pseudo-code, since exact API depends on the provider):
+          </p>
+          <pre><code class="language-python"># src/phase4/image_tool.py
+from langchain_core.tools import tool
+
+
+@tool
+def analyze_image(path: str) -> str:
+    """
+    Analyze an image at the given path and describe it.
+    In practice, use a multimodal model (e.g. OpenAI Vision) here.
+    """
+    # Example (pseudo-code, adjust to real API):
+    # from langchain_openai import ChatOpenAI
+    # llm = ChatOpenAI(model="gpt-4o-mini")  # vision-capable variant
+    # with open(path, "rb") as f:
+    #     img_bytes = f.read()
+    # response = llm.invoke([ImageMessage(img_bytes), TextMessage("Describe this image.")])
+    # return response.content
+    return f"(Stub) Would analyze image at {path} using a vision model."</code></pre>
+
+          <h3>12.3 Code-Interpreter / Python REPL Tools</h3>
+          <p>
+            Code-execution tools are powerful but must be sandboxed. Here is a minimal, constrained interpreter:
+          </p>
+          <pre><code class="language-python"># src/phase4/code_interpreter.py
+from typing import Any, Dict
+from langchain_core.tools import tool
+
+
+SAFE_GLOBALS: Dict[str, Any] = {
+    "__builtins__": {
+        "abs": abs,
+        "min": min,
+        "max": max,
+        "sum": sum,
+        "len": len,
+        "range": range,
+    }
+}
+
+
+@tool
+def python_eval(code: str) -> str:
+    """
+    Evaluate a small Python expression safely (no imports, no IO).
+    Intended for numeric or simple list/dict operations.
+    """
+    try:
+        result = eval(code, SAFE_GLOBALS, {})
+        return repr(result)
+    except Exception as e:
+        return f"Error: {e}"</code></pre>
+
+          <p>
+            You can expose this tool to an agent with a clear system prompt that restricts what kind of code it is allowed
+            to generate (no file/network access, no imports).
+          </p>
+
+          <!-- Module 13 -->
+          <h2 id="module13">Module 13 – Memory, Safety, Governance &amp; Evaluation</h2>
+          <p>
+            This module strengthens your agents with long-term memory, explicit safety rules, and evaluation practices.
+          </p>
+
+          <h3>13.1 Long-Term Memory with a Vector Store</h3>
+          <p>
+            Instead of only relying on conversation buffers, you can store key events into a vector store and let
+            the agent retrieve them later as “memory”.
+          </p>
+          <pre><code class="language-python"># src/phase4/vector_memory.py
+from typing import List
+from dataclasses import dataclass
+
+from dotenv import load_dotenv
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+
+@dataclass
+class MemoryStore:
+    vectorstore: FAISS
+
+    @classmethod
+    def create(cls):
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        # Start empty
+        return cls(vectorstore=FAISS.from_texts([], embeddings))
+
+    def add_event(self, text: str, metadata: dict | None = None):
+        self.vectorstore.add_texts([text], metadatas=[metadata or {}])
+
+    def recall(self, query: str, k: int = 5) -> List[str]:
+        docs = self.vectorstore.similarity_search(query, k=k)
+        return [d.page_content for d in docs]
+
+
+def chat_with_memory(question: str, memory: MemoryStore) -> str:
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an assistant with long-term memory. Use the provided memory snippets if helpful.",
+            ),
+            (
+                "human",
+                "Memory snippets:\n{memories}\n\nUser question:\n{question}",
+            ),
+        ]
+    )
+    chain = prompt | llm | StrOutputParser()
+
+    memories = memory.recall(question)
+    memories_text = "\n\n".join(memories) if memories else "(no relevant memories)"
+    answer = chain.invoke({"memories": memories_text, "question": question})
+
+    # After answering, store this exchange as a new memory
+    memory.add_event(f"Q: {question}\nA: {answer}", metadata={"type": "qa"})
+    return answer</code></pre>
+
+          <h3>13.2 Safety Policies Around Tool Use</h3>
+          <p>
+            You can implement a simple policy engine that decides whether a tool call is allowed. For example,
+            forbid certain dangerous patterns or domains.
+          </p>
+          <pre><code class="language-python"># src/phase4/tool_policy.py
+from typing import Dict, Any
+
+
+def is_tool_call_allowed(tool_name: str, args: Dict[str, Any]) -> bool:
+    # Example rules:
+    if tool_name == "python_eval":
+        code = args.get("code", "")
+        if "import" in code or "__" in code:
+            return False
+    if tool_name == "web_search":
+        query = args.get("query", "")
+        if "password" in query.lower():
+            return False
+    return True
+
+
+def guard_tool_call(tool_name: str, args: Dict[str, Any], call_fn):
+    if not is_tool_call_allowed(tool_name, args):
+        return f"Policy blocked tool '{tool_name}' with args {args}"
+    return call_fn(**args)</code></pre>
+
+          <h3>13.3 Logging &amp; Audit Trails</h3>
+          <p>
+            For governance and debugging, log every tool call and decision:
+          </p>
+          <pre><code class="language-python">import logging
+import uuid
+
+logger = logging.getLogger("agent_audit")
+logging.basicConfig(level=logging.INFO)
+
+
+def log_tool_call(tool_name: str, args: dict, result: str, allowed: bool, run_id: str | None = None):
+    if run_id is None:
+        run_id = str(uuid.uuid4())
+    logger.info(
+        "run_id=%s tool=%s allowed=%s args=%s result_snippet=%s",
+        run_id,
+        tool_name,
+        allowed,
+        args,
+        result[:120].replace("\n", " "),
+    )</code></pre>
+
+          <h3>13.4 Evaluating Agent Behavior</h3>
+          <p>
+            You can build simple evaluation harnesses around your agents:
+          </p>
+          <ul>
+            <li>Define a dataset of tasks with expected behaviors.</li>
+            <li>Run your agents on each task; log outputs and metrics (success/failure, latency, cost).</li>
+            <li>Use automatic checks plus manual review.</li>
+          </ul>
+          <p>
+            For deeper evaluation, you can use tools like LangSmith to capture traces and run evaluators on top.
+          </p>
+
+          <!-- Module 14 -->
+          <h2 id="module14">Module 14 – Multi-Agent Coordination &amp; Scalable Deployment</h2>
+          <p>
+            This final module looks at multi-agent collaboration patterns and what it takes to run many agent
+            sessions in production.
+          </p>
+
+          <h3>14.1 Debate &amp; Critique Agents</h3>
+          <p>
+            A simple debate pattern:
+          </p>
+          <ol>
+            <li>Two agents independently produce answers.</li>
+            <li>A third “judge” agent compares and chooses.</li>
+          </ol>
+          <pre><code class="language-python"># src/phase4/debate.py
+from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+
+def build_debater(name: str) -> ChatOpenAI:
+    return ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+
+
+def debate(question: str) -> str:
+    load_dotenv()
+    llm1 = build_debater("Agent A")
+    llm2 = build_debater("Agent B")
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are {name}. Provide a detailed answer."),
+            ("human", "{question}"),
+        ]
+    )
+    chain = prompt | StrOutputParser()
+
+    a_answer = (prompt | llm1 | StrOutputParser()).invoke({"name": "Agent A", "question": question})
+    b_answer = (prompt | llm2 | StrOutputParser()).invoke({"name": "Agent B", "question": question})
+
+    judge_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+    judge_prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a judge. Compare two answers and pick the better one."),
+            (
+                "human",
+                "Question:\n{question}\n\nAnswer A:\n{a}\n\nAnswer B:\n{b}\n\n"
+                "Explain which answer is better and why. Then restate the final answer.",
+            ),
+        ]
+    )
+    judge_chain = judge_prompt | judge_llm | StrOutputParser()
+    return judge_chain.invoke({"question": question, "a": a_answer, "b": b_answer})</code></pre>
+
+          <h3>14.2 Multi-Agent LangGraph Patterns</h3>
+          <p>
+            In LangGraph, you can represent each agent as a node or subgraph. A debate graph might:
+          </p>
+          <ul>
+            <li>Have nodes for <code>agent_a</code>, <code>agent_b</code>, and <code>judge</code>.</li>
+            <li>Store their answers in shared state.</li>
+            <li>End with a <code>final_answer</code> field chosen by the judge.</li>
+          </ul>
+
+          <h3>14.3 Scaling Agent Sessions</h3>
+          <p>
+            For production workloads:
+          </p>
+          <ul>
+            <li>Run agents in containers (e.g. FastAPI + LangGraph inside Docker).</li>
+            <li>Use a queue or event system to manage long-running tasks.</li>
+            <li>Implement backpressure and rate limiting against LLM APIs.</li>
+            <li>Isolate user data by using per-user state keys and separate memory stores.</li>
+          </ul>
+
+          <div class="note">
+            Many of these patterns are architecture-specific, but the mental model stays the same:
+            LangChain handles modeling and tools, LangGraph orchestrates multi-step and multi-agent flows,
+            and your infrastructure provides scaling, queues, and storage.
+          </div>
+
+          <div class="chapter-nav">
+            <a class="secondary" href="phase3.html">&larr; Previous: Phase 3</a>
+            <a href="index.html">Back to Home &rarr;</a>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LangChain &amp; LangGraph Ebook</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>LangChain &amp; LangGraph Study Guide</h1>
+        <p class="tagline">
+          From basic LLM calls to production-grade multi-agent systems.
+        </p>
+      </div>
+      <div class="header-controls">
+        <input
+          id="global-search"
+          type="search"
+          placeholder="Search headings in this chapter…"
+          aria-label="Search headings in this chapter"
+        />
+        <button type="button" class="theme-toggle" id="theme-toggle">
+          Toggle dark mode
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Chapters navigation">
+        <h2>Chapters</h2>
+        <ol>
+          <li><a href="phase0.html">Phase 0 – Prerequisites &amp; Setup</a></li>
+          <li><a href="phase1.html">Phase 1 – LangChain Core &amp; LCEL</a></li>
+          <li><a href="phase2.html">Phase 2 – LangGraph Fundamentals</a></li>
+          <li><a href="phase3.html">Phase 3 – Applications, Deployment &amp; Advanced</a></li>
+          <li><a href="phase4.html">Phase 4 – Advanced Agentic Systems</a></li>
+        </ol>
+      </nav>
+
+      <section class="content">
+        <article>
+          <h2>How to Use This Ebook</h2>
+          <p>
+            This ebook is organized into phases that build on each other. Start at
+            <strong>Phase 0</strong> if you are new to Python or LLM development,
+            or jump directly into later phases if you already have the basics.
+          </p>
+          <p>
+            Each chapter mixes explanations with concrete Python code snippets
+            showing how to use <code>langchain</code> and <code>langgraph</code>.
+            You can copy &amp; paste the snippets into your own project and adapt
+            them as you go.
+          </p>
+          <h3>Recommended Path</h3>
+          <ul>
+            <li>Phase 0 – set up your environment and call your first model.</li>
+            <li>Phase 1 – learn LangChain core concepts and LCEL.</li>
+            <li>Phase 2 – learn LangGraph and build stateful workflows.</li>
+            <li>
+              Phase 3 – build production-style RAG assistants, multi-agent systems,
+              and learn how to deploy and harden them.
+            </li>
+            <li>
+              Phase 4 – explore advanced agentic patterns, planning, richer tools,
+              long-term memory, safety, and scalable multi-agent deployments.
+            </li>
+          </ul>
+          <p>
+            Use the navigation on the left (or at the top on small screens) to move
+            between phases. Within each phase, there are local tables of contents
+            and “Previous / Next” chapter links.
+          </p>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

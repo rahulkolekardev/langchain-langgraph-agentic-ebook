@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Phase 0 – Prerequisites &amp; Setup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Phase 0 – Prerequisites &amp; Setup</h1>
+        <p class="tagline">
+          Get your Python skills and environment ready to build LangChain &amp; LangGraph apps.
+        </p>
+      </div>
+      <div class="header-controls">
+        <input
+          id="global-search"
+          type="search"
+          placeholder="Search headings in this chapter…"
+          aria-label="Search headings in this chapter"
+        />
+        <button type="button" class="theme-toggle" id="theme-toggle">
+          Toggle dark mode
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Chapters navigation">
+        <h2>Chapters</h2>
+        <ol>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="phase0.html">Phase 0 – Prerequisites &amp; Setup</a></li>
+          <li><a href="phase1.html">Phase 1 – LangChain Core &amp; LCEL</a></li>
+          <li><a href="phase2.html">Phase 2 – LangGraph Fundamentals</a></li>
+          <li><a href="phase3.html">Phase 3 – Applications &amp; Advanced</a></li>
+          <li><a href="phase4.html">Phase 4 – Advanced Agentic Systems</a></li>
+        </ol>
+      </nav>
+
+      <section class="content">
+        <article>
+          <h1>Overview</h1>
+          <p>
+            Before you build sophisticated agents and retrieval-augmented generation (RAG) systems,
+            you need a solid <strong>Python foundation</strong>, a working <strong>development environment</strong>,
+            and at least one <strong>LLM provider</strong> configured.
+          </p>
+          <p>
+            This phase ensures you can:
+          </p>
+          <ul>
+            <li>Write and run basic Python scripts (sync and async).</li>
+            <li>Create isolated project environments with <code>venv</code> and <code>pip</code>.</li>
+            <li>Install and configure LangChain, LangGraph, and dependencies.</li>
+            <li>Call an LLM (e.g. OpenAI) from Python.</li>
+          </ul>
+
+          <div class="toc">
+            <h3>In this chapter</h3>
+            <ul>
+              <li><a href="#core-python">1. Core Python Skills</a></li>
+              <li><a href="#llm-basics">2. LLM Basics</a></li>
+              <li><a href="#env-setup">3. Environment Setup</a></li>
+              <li><a href="#read-docs">4. Reading Docs Strategically</a></li>
+              <li><a href="#mini-task">Mini Task – First LangChain Script</a></li>
+            </ul>
+          </div>
+
+          <h2 id="core-python">1. Core Python Skills</h2>
+          <p>
+            LangChain and LangGraph are Python libraries. You don’t need to be a
+            “Python expert”, but you should be comfortable with:
+          </p>
+          <ul>
+            <li>Functions and classes</li>
+            <li>Type hints</li>
+            <li>Basic async/await</li>
+            <li>Project layout and virtual environments</li>
+          </ul>
+
+          <h3>1.1 Functions and Type Hints</h3>
+          <p>
+            Functions let you encapsulate logic. Type hints make your code easier to understand
+            and catch mistakes early with tools like <code>mypy</code> or your IDE.
+          </p>
+          <pre><code class="language-python">from typing import List
+
+def summarize_points(points: List[str]) -> str:
+    """Return a short summary of a list of bullet points."""
+    joined = "; ".join(points)
+    return f"In summary, we covered: {joined}."
+
+if __name__ == "__main__":
+    topics = ["LangChain basics", "LangGraph workflows", "RAG"]
+    print(summarize_points(topics))</code></pre>
+
+          <h3>1.2 Classes</h3>
+          <p>
+            Many LangChain components are classes (models, prompts, chains). Understanding how
+            classes work helps you customize and wrap them.
+          </p>
+          <pre><code class="language-python">class SimpleCounter:
+    def __init__(self) -> None:
+        self.value = 0
+
+    def increment(self, step: int = 1) -> None:
+        self.value += step
+
+    def reset(self) -> None:
+        self.value = 0
+
+if __name__ == "__main__":
+    counter = SimpleCounter()
+    counter.increment()
+    counter.increment(5)
+    print("Counter value:", counter.value)</code></pre>
+
+          <h3>1.3 Virtual Environments &amp; Project Structure</h3>
+          <p>
+            A virtual environment isolates your project’s dependencies so they don’t conflict
+            with other Python projects.
+          </p>
+          <pre><code class="language-bash"># 1. Create a folder for this course
+mkdir langchain-langgraph-study
+cd langchain-langgraph-study
+
+# 2. Create a virtual environment (Linux/macOS)
+python -m venv .venv
+source .venv/bin/activate
+
+# On Windows PowerShell:
+# python -m venv .venv
+# .venv\Scripts\Activate.ps1
+
+# 3. Upgrade pip
+python -m pip install --upgrade pip</code></pre>
+          <p>
+            A simple layout for this ebook could be:
+          </p>
+          <pre><code class="language-text">langchain-langgraph-study/
+├─ .venv/
+├─ src/
+│  ├─ phase0/
+│  ├─ phase1/
+│  └─ ...
+├─ Readme.md
+└─ requirements.txt</code></pre>
+
+          <h3>1.4 Basic AsyncIO</h3>
+          <p>
+            LangChain and LangGraph both support async execution. Knowing how to use
+            <code>async def</code> and <code>await</code> lets you:
+          </p>
+          <ul>
+            <li>Call models in parallel.</li>
+            <li>Build responsive APIs.</li>
+          </ul>
+          <pre><code class="language-python">import asyncio
+
+async def fetch_answer(question: str) -> str:
+    # In real code, you'll call an LLM here.
+    await asyncio.sleep(0.5)
+    return f"Mock answer to: {question}"
+
+async def main() -> None:
+    questions = ["What is LangChain?", "What is LangGraph?"]
+    tasks = [fetch_answer(q) for q in questions]
+    answers = await asyncio.gather(*tasks)
+    for q, a in zip(questions, answers):
+        print(q, "->", a)
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+
+          <h2 id="llm-basics">2. LLM Basics</h2>
+          <p>
+            Large Language Models (LLMs) are the core engine behind LangChain applications.
+            LangChain provides a unified interface to different providers (OpenAI, Anthropic,
+            local models such as Ollama, and more).
+          </p>
+
+          <h3>2.1 Key Concepts</h3>
+          <ul>
+            <li><strong>Prompt</strong> – the text you send to the model.</li>
+            <li><strong>Context window</strong> – maximum tokens (input + output) the model can process.</li>
+            <li><strong>Tokens</strong> – chunks of text; pricing and limits are per token.</li>
+            <li><strong>Temperature</strong> – randomness; low = deterministic, high = creative.</li>
+            <li><strong>Chat vs. completion models</strong> – structured messages vs. raw text.</li>
+          </ul>
+
+          <h3>2.2 Chat vs. Text Completion</h3>
+          <p>
+            Modern APIs (like OpenAI’s <code>gpt-4o</code>) use a <strong>chat-style</strong> interface,
+            where you send a list of messages with roles like <code>system</code>, <code>user</code>,
+            and <code>assistant</code>.
+          </p>
+          <pre><code class="language-python"># Pseudo-example using OpenAI's chat completion style (without LangChain)
+from openai import OpenAI
+import os
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+response = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=[
+        {"role": "system", "content": "You are a concise assistant."},
+        {"role": "user", "content": "Explain LangChain in one paragraph."},
+    ],
+    temperature=0.2,
+)
+
+print(response.choices[0].message.content)</code></pre>
+          <p>
+            LangChain wraps this in a higher-level interface that integrates with prompts,
+            tools, and document workflows. You will see that starting in Phase 1.
+          </p>
+
+          <h2 id="env-setup">3. Environment Setup</h2>
+          <p>
+            Next, you’ll set up a project that can run both LangChain and LangGraph.
+          </p>
+
+          <h3>3.1 Install Dependencies</h3>
+          <pre><code class="language-bash"># Inside your activated virtual environment
+pip install \
+  langchain langchain-core langchain-community \
+  langchain-openai langgraph python-dotenv \
+  faiss-cpu chromadb</code></pre>
+          <p>
+            This installs:
+          </p>
+          <ul>
+            <li><code>langchain</code> and <code>langchain-core</code> – core abstractions and LCEL.</li>
+            <li><code>langchain-openai</code> – OpenAI chat and embedding wrappers.</li>
+            <li><code>langchain-community</code> – community integrations (vector stores, loaders).</li>
+            <li><code>langgraph</code> – orchestration framework for stateful workflows.</li>
+            <li><code>python-dotenv</code> – load API keys from <code>.env</code>.</li>
+            <li><code>faiss-cpu</code> / <code>chromadb</code> – common vector stores for RAG.</li>
+          </ul>
+
+          <h3>3.2 Store Secrets in <code>.env</code></h3>
+          <p>
+            Never hard-code API keys directly in your source code. Instead, store them in
+            a <code>.env</code> file and load them at runtime.
+          </p>
+          <pre><code class="language-text"># .env (do not commit to Git)
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-optional</code></pre>
+          <pre><code class="language-python"># src/phase0/load_env_example.py
+import os
+from dotenv import load_dotenv
+
+def load_env() -> None:
+    load_dotenv()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set in your .env file")
+    print("API key loaded successfully (hidden).")
+
+if __name__ == "__main__":
+    load_env()</code></pre>
+
+          <h3>3.3 Verifying the Installation</h3>
+          <p>
+            Create a quick script to ensure LangChain and LangGraph import correctly.
+          </p>
+          <pre><code class="language-python"># src/phase0/verify_install.py
+from langchain_core.runnables import RunnableLambda
+from langgraph.graph import StateGraph
+
+def say_hello(name: str) -> str:
+    return f"Hello, {name}!"
+
+def main() -> None:
+    # Test LangChain LCEL
+    chain = RunnableLambda(say_hello)
+    print(chain.invoke("LangChain"))
+
+    # Test LangGraph basic graph
+    class State(dict):
+        pass
+
+    def greet(state: State) -> State:
+        name = state.get("name", "world")
+        return {"greeting": f"Hello from LangGraph, {name}!"}
+
+    graph = StateGraph(State)
+    graph.add_node("greet", greet)
+    graph.set_entry_point("greet")
+    app = graph.compile()
+    result = app.invoke({"name": "LangGraph"})
+    print(result["greeting"])
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+          <h2 id="read-docs">4. Reading Docs Strategically</h2>
+          <p>
+            LangChain and LangGraph have extensive documentation. At this point, you don’t
+            need to read everything in depth. Instead:
+          </p>
+          <ul>
+            <li>Skim the main sections (models, prompts, chains, agents, document loaders).</li>
+            <li>Skim LangGraph’s concepts (graphs, nodes, state, edges).</li>
+            <li>Note where examples live so you can refer back later.</li>
+            <li>
+              Briefly look at observability tools like <strong>LangSmith</strong> (or similar tracing
+              systems) so you know that detailed traces and evaluations are available once you
+              reach the production and evaluation phases.
+            </li>
+          </ul>
+          <div class="note">
+            Goal: know what exists and roughly where to find it, not memorize every API.
+          </div>
+
+          <h2 id="mini-task">Mini Task – First LangChain Script</h2>
+          <p>
+            To finish Phase 0, you’ll write a small script that:
+          </p>
+          <ol>
+            <li>Loads your API key from <code>.env</code>.</li>
+            <li>Asks the user for a question.</li>
+            <li>Calls a chat model using LangChain.</li>
+            <li>Prints the answer.</li>
+          </ol>
+
+          <h3>5.1 Basic Chat Script with LangChain</h3>
+          <pre><code class="language-python"># src/phase0/first_langchain_chat.py
+import os
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, SystemMessage
+
+
+def main() -> None:
+    load_dotenv()
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Set OPENAI_API_KEY in your .env file first.")
+
+    # Configure a chat model (you can change model name)
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0.2,
+    )
+
+    print("Ask a question about LangChain or LangGraph:")
+    question = input("> ").strip()
+    if not question:
+        print("No question provided, exiting.")
+        return
+
+    messages = [
+        SystemMessage(content="You are a helpful assistant for LangChain and LangGraph."),
+        HumanMessage(content=question),
+    ]
+
+    response = model.invoke(messages)
+    print("\n--- Answer ---")
+    print(response.content)
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+          <h3>5.2 Running the Script</h3>
+          <pre><code class="language-bash"># From your project root
+export OPENAI_API_KEY="sk-..."  # or configure in .env and just run
+python src/phase0/first_langchain_chat.py</code></pre>
+          <p>
+            If everything is wired correctly, you’ll see a response from the model. You’ve
+            now completed the minimum prerequisites to start building with LangChain
+            and LangGraph.
+          </p>
+
+          <div class="chapter-nav">
+            <a class="secondary" href="index.html">&larr; Back to Home</a>
+            <a href="phase1.html">Next: Phase 1 – LangChain Core &amp; LCEL &rarr;</a>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

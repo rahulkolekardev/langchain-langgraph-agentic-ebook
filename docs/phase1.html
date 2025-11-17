@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Phase 1 – LangChain Core &amp; LCEL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Phase 1 – LangChain Core &amp; LCEL</h1>
+        <p class="tagline">
+          Learn LangChain’s core abstractions and the LangChain Expression Language (LCEL).
+        </p>
+      </div>
+      <div class="header-controls">
+        <input
+          id="global-search"
+          type="search"
+          placeholder="Search headings in this chapter…"
+          aria-label="Search headings in this chapter"
+        />
+        <button type="button" class="theme-toggle" id="theme-toggle">
+          Toggle dark mode
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Chapters navigation">
+        <h2>Chapters</h2>
+        <ol>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="phase0.html">Phase 0 – Prerequisites &amp; Setup</a></li>
+          <li><a href="phase1.html">Phase 1 – LangChain Core &amp; LCEL</a></li>
+          <li><a href="phase2.html">Phase 2 – LangGraph Fundamentals</a></li>
+          <li><a href="phase3.html">Phase 3 – Applications &amp; Advanced</a></li>
+          <li><a href="phase4.html">Phase 4 – Advanced Agentic Systems</a></li>
+        </ol>
+      </nav>
+
+      <section class="content">
+        <article>
+          <h1>Overview</h1>
+          <p>
+            In Phase 1, you will learn how LangChain structures LLM applications and how to use
+            the <strong>LangChain Expression Language (LCEL)</strong> to compose reusable chains.
+          </p>
+          <p>
+            By the end of this phase you will be able to:
+          </p>
+          <ul>
+            <li>Build prompt-driven chains using LCEL.</li>
+            <li>Load and split documents, and perform basic RAG.</li>
+            <li>Create tools, simple agents, and memory-backed chatbots.</li>
+          </ul>
+
+          <div class="toc">
+            <h3>Modules in this Phase</h3>
+            <ul>
+              <li><a href="#module1">Module 1 – Core Concepts &amp; LCEL</a></li>
+              <li><a href="#module2">Module 2 – Data, Loaders &amp; RAG</a></li>
+              <li><a href="#module3">Module 3 – Tools, Agents, Memory &amp; Structured Output</a></li>
+            </ul>
+          </div>
+
+          <!-- Module 1 -->
+          <h2 id="module1">Module 1 – LangChain Core Concepts &amp; LCEL</h2>
+          <p>
+            This module introduces the main building blocks in LangChain and how LCEL lets you
+            connect them into pipelines using a simple, composable syntax.
+          </p>
+
+          <h3>1.1 What LangChain Gives You</h3>
+          <p>
+            LangChain sits <em>above</em> your model provider and provides a toolkit for building applications:
+          </p>
+          <ul>
+            <li><strong>Model abstractions</strong> – unify different providers (OpenAI, etc.).</li>
+            <li><strong>Prompts</strong> – structured templates for messages.</li>
+            <li><strong>Output parsers</strong> – safely parse raw LLM output into structured types.</li>
+            <li><strong>Document loaders &amp; retrievers</strong> – ingest data and perform retrieval.</li>
+            <li><strong>Tools &amp; agents</strong> – let models call functions and make decisions.</li>
+          </ul>
+          <p>
+            Most of these pieces are implemented as <strong>Runnables</strong>, which can be composed with LCEL.
+          </p>
+
+          <h3>1.2 Runnables &amp; the Pipe Operator</h3>
+          <p>
+            LCEL is the “glue” of LangChain. A <strong>Runnable</strong> is any component that:
+          </p>
+          <ul>
+            <li>Takes an input.</li>
+            <li>Returns an output.</li>
+            <li>Supports standard methods like <code>.invoke</code>, <code>.batch</code>, and <code>.stream</code>.</li>
+          </ul>
+          <p>
+            You connect runnables using the <code>|</code> (“pipe”) operator:
+          </p>
+          <pre><code class="language-python">from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        ("system", "You are a concise assistant."),
+        ("human", "Explain {topic} in 3 bullet points."),
+    ]
+)
+
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+parser = StrOutputParser()
+
+chain = prompt | model | parser
+
+result = chain.invoke({"topic": "LangChain"})
+print(result)</code></pre>
+          <p>
+            Here, the chain consists of three runnables:
+          </p>
+          <ol>
+            <li><code>prompt</code> – turns input dict into messages.</li>
+            <li><code>model</code> – calls the LLM with those messages.</li>
+            <li><code>parser</code> – converts the model output into a string.</li>
+          </ol>
+
+          <h3>1.3 Core Methods: <code>.invoke</code>, <code>.batch</code>, <code>.stream</code>, <code>.astream</code></h3>
+          <p>
+            LCEL chains support a standard set of methods:
+          </p>
+          <ul>
+            <li><code>.invoke(input)</code> – run once with a single input.</li>
+            <li><code>.batch(inputs)</code> – run on a list of inputs (sync).</li>
+            <li><code>.stream(input)</code> – generator yielding partial outputs.</li>
+            <li><code>.astream(input)</code> – async version of stream.</li>
+          </ul>
+          <pre><code class="language-python">topics = ["RAG", "LangGraph", "LLM evaluation"]
+
+# 1) Batch
+for output in chain.batch([{"topic": t} for t in topics]):
+    print("---")
+    print(output)
+
+# 2) Streaming
+print("\nStreaming explanation of LangGraph:\n")
+for chunk in chain.stream({"topic": "LangGraph"}):
+    # Each chunk is a partial string
+    print(chunk, end="", flush=True)</code></pre>
+
+          <h3>1.4 Advanced Building Blocks: RunnableLambda, RunnableParallel, RunnableBranch</h3>
+          <p>
+            LCEL includes helpers that let you inject custom Python logic or branch/merge flows.
+          </p>
+          <pre><code class="language-python">from langchain_core.runnables import RunnableLambda, RunnableParallel, RunnableBranch
+
+def to_uppercase(text: str) -> str:
+    return text.upper()
+
+uppercase = RunnableLambda(to_uppercase)
+
+# Parallel: run multiple chains and collect results as a dict
+parallel = RunnableParallel(
+    original=lambda x: x,
+    shouting=uppercase,
+)
+
+print(parallel.invoke("hello LCEL"))
+# {'original': 'hello LCEL', 'shouting': 'HELLO LCEL'}</code></pre>
+          <p>
+            <code>RunnableBranch</code> lets you choose a path based on the input:
+          </p>
+          <pre><code class="language-python">def is_short(input: dict) -> bool:
+    return len(input["text"]) &lt; 40
+
+short_chain = RunnableLambda(lambda d: f"Short text: {d['text']}")
+long_chain = RunnableLambda(lambda d: f"Long text: {d['text']}")
+
+branch = RunnableBranch(
+    (is_short, short_chain),
+    (lambda d: True, long_chain),  # default branch
+)
+
+print(branch.invoke({"text": "Hi"}))
+print(branch.invoke({"text": "This is a long piece of text for demonstration."}))</code></pre>
+
+          <h3>1.5 Configuration: <code>.with_config</code>, Retries &amp; Fallbacks</h3>
+          <p>
+            LCEL supports attaching configuration metadata (for tracing, tagging, etc.) and
+            wrapping chains with retries or fallbacks.
+          </p>
+          <pre><code class="language-python">configured_chain = chain.with_config(
+    tags=["phase1", "module1"],
+    metadata={"purpose": "educational-example"},
+)
+
+# Using a simple fallback: try a more capable model if the first fails
+fallback_model = ChatOpenAI(model="gpt-4o", temperature=0.2)
+fallback_chain = prompt | fallback_model | parser
+
+robust_chain = configured_chain.with_fallbacks([fallback_chain])
+
+print(robust_chain.invoke({"topic": "LCEL configuration"}))</code></pre>
+
+          <h3>1.6 Simple Prompt Chaining</h3>
+          <p>
+            Now you can build a simple reusable chain that:
+          </p>
+          <ol>
+            <li>Takes a topic as input.</li>
+            <li>Generates an explanation + bullet points.</li>
+            <li>Supports normal, batch, and streaming use.</li>
+          </ol>
+          <pre><code class="language-python">def build_topic_explainer():
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_openai import ChatOpenAI
+    from langchain_core.output_parsers import StrOutputParser
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a senior AI engineer and educator."),
+            (
+                "human",
+                "Explain the topic '{topic}' in a short paragraph "
+                "followed by 3 bullet points.",
+            ),
+        ]
+    )
+
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+    parser = StrOutputParser()
+    return prompt | model | parser
+
+
+if __name__ == "__main__":
+    chain = build_topic_explainer()
+    print(chain.invoke({"topic": "LangChain Expression Language (LCEL)"}))</code></pre>
+
+          <!-- Module 2 -->
+          <h2 id="module2">Module 2 – Working with Data: Loaders, Splitters, Vector Stores &amp; Simple RAG</h2>
+          <p>
+            This module focuses on getting external data into your LangChain app and building
+            a basic Retrieval-Augmented Generation (RAG) system.
+          </p>
+
+          <h3>2.1 Document Loaders</h3>
+          <p>
+            Document loaders turn raw files or remote sources into a list of
+            <code>Document</code> objects with <code>page_content</code> and <code>metadata</code>.
+          </p>
+          <pre><code class="language-python">from langchain_community.document_loaders import TextLoader, PyPDFLoader
+
+# Load a plain text or markdown file
+text_loader = TextLoader("notes/langchain_intro.md")
+text_docs = text_loader.load()
+
+# Load a PDF
+pdf_loader = PyPDFLoader("notes/langchain_paper.pdf")
+pdf_docs = pdf_loader.load()
+
+print("Text docs:", len(text_docs), "PDF docs:", len(pdf_docs))</code></pre>
+          <p>
+            Common loaders include:
+          </p>
+          <ul>
+            <li><code>TextLoader</code> – local text/markdown files.</li>
+            <li><code>PyPDFLoader</code> – PDFs.</li>
+            <li>Web loaders – load HTML content from URLs.</li>
+          </ul>
+
+          <h3>2.2 Text Splitters</h3>
+          <p>
+            Most models can’t handle large documents in a single prompt. You use text splitters
+            to break documents into overlapping chunks.
+          </p>
+          <pre><code class="language-python">from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+all_docs = text_docs + pdf_docs
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=150,
+)
+
+chunks = splitter.split_documents(all_docs)
+print("Total chunks:", len(chunks))
+print("Sample chunk content:\n", chunks[0].page_content[:200])</code></pre>
+
+          <h3>2.3 Embeddings &amp; Vector Stores</h3>
+          <p>
+            To perform semantic search, you convert text chunks into vector embeddings and store
+            them in a vector store such as FAISS or Chroma.
+          </p>
+          <pre><code class="language-python">from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
+retriever = vectorstore.as_retriever(search_kwargs={"k": 4})</code></pre>
+          <p>
+            The <code>retriever</code> object is what you’ll plug into your RAG chain.
+          </p>
+
+          <h3>2.4 Building a Simple RAG Chain with LCEL</h3>
+          <p>
+            A minimal RAG pipeline:
+          </p>
+          <ol>
+            <li>User asks a question.</li>
+            <li>Retriever fetches relevant chunks.</li>
+            <li>Prompt composes the question and context.</li>
+            <li>Model generates an answer.</li>
+          </ol>
+          <pre><code class="language-python">from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+
+RAG_PROMPT = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a helpful assistant. Use the provided context snippets "
+            "to answer the question. If the answer is not in the context, say "
+            "you don't know.",
+        ),
+        (
+            "human",
+            "Context:\n{context}\n\nQuestion: {question}\n\nAnswer step by step:",
+        ),
+    ]
+)
+
+def format_docs(docs):
+    return "\n\n".join(d.page_content for d in docs)
+
+retrieval_chain = (
+    {"context": retriever | RunnableLambda(format_docs), "question": RunnableLambda(lambda x: x["question"])}
+    | RAG_PROMPT
+    | ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+    | StrOutputParser()
+)</code></pre>
+
+          <h3>2.5 CLI RAG App</h3>
+          <p>
+            Wrap the chain in a simple CLI for interactive querying:
+          </p>
+          <pre><code class="language-python"># src/phase1/simple_rag_cli.py
+import os
+from dotenv import load_dotenv
+
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.vectorstores import FAISS
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda
+from langchain_community.document_loaders import TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+def build_rag_chain():
+    loader = TextLoader("notes/course_notes.md")
+    docs = loader.load()
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+    chunks = splitter.split_documents(docs)
+
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You answer questions based on the given course notes. "
+                "If you are not sure, say you don't know.",
+            ),
+            (
+                "human",
+                "Context:\n{context}\n\nQuestion: {question}",
+            ),
+        ]
+    )
+
+    def format_docs(docs):
+        return "\n\n".join(d.page_content for d in docs)
+
+    model = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+    parser = StrOutputParser()
+
+    chain = (
+        {
+            "context": retriever | RunnableLambda(format_docs),
+            "question": RunnableLambda(lambda x: x["question"]),
+        }
+        | prompt
+        | model
+        | parser
+    )
+    return chain
+
+
+def main():
+    load_dotenv()
+    chain = build_rag_chain()
+
+    print("RAG CLI over your course notes. Type 'exit' to quit.")
+    while True:
+        question = input("\nQuestion: ").strip()
+        if not question or question.lower() in {"exit", "quit"}:
+            break
+        answer = chain.invoke({"question": question})
+        print("\nAnswer:\n", answer)
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+          <!-- Module 3 -->
+          <h2 id="module3">Module 3 – Tools, Agents, Memory &amp; Structured Output</h2>
+          <p>
+            This module introduces tool-calling, basic agents, conversational memory, and structured outputs.
+          </p>
+
+          <h3>3.1 Tools in LangChain</h3>
+          <p>
+            A <strong>tool</strong> is a Python function (or wrapper) that the model can invoke to perform an action:
+            search, calculations, HTTP calls, etc.
+          </p>
+          <pre><code class="language-python">from langchain_core.tools import tool
+
+@tool
+def add_numbers(x: float, y: float) -> float:
+    """Add two numbers and return the result."""
+    return x + y
+
+@tool
+def simple_search(query: str) -> str:
+    """
+    A placeholder search tool.
+    In production, you would call a search API or a RAG chain here.
+    """
+    # e.g. call a web search API, or your own RAG pipeline:
+    # return rag_chain.invoke({"question": query})
+    return f"Pretend search results for: {query}"
+
+print(add_numbers.invoke({"x": 2, "y": 3}))      # 5.0
+print(simple_search.invoke({"query": "LangChain"}))</code></pre>
+          <p>
+            Tools typically define an input schema (via type hints or pydantic models) so that the LLM can call them correctly.
+          </p>
+
+          <h3>3.2 Simple Tool-Calling Agent</h3>
+          <p>
+            LangChain provides agent constructors that let a model decide which tool to call. Here is a simple example
+            using an OpenAI model with tool calling:
+          </p>
+          <pre><code class="language-python"># src/phase1/tool_agent.py
+import os
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+
+
+@tool
+def calculator(expression: str) -> str:
+    """Evaluate a basic Python arithmetic expression like '2 + 3 * 4'."""
+    try:
+        # WARNING: eval is dangerous in production; use a safe parser instead.
+        result = eval(expression, {"__builtins__": {}}, {})
+        return str(result)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def build_agent():
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    tools = [calculator, simple_search]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are a helpful math assistant. Use tools when needed."),
+            ("human", "{input}"),
+            ("assistant", "Think step by step, and use the calculator tool for arithmetic."),
+        ]
+    )
+
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+    return executor
+
+
+if __name__ == "__main__":
+    agent = build_agent()
+    result = agent.invoke({"input": "What is 12 * (7 + 5)?"})
+    print("Final answer:", result["output"])</code></pre>
+
+          <h3>3.3 Memory – Remembering Conversation History</h3>
+          <p>
+            <strong>Memory</strong> lets your chatbot remember earlier turns. The simplest form is a conversation buffer.
+          </p>
+          <pre><code class="language-python"># src/phase1/chat_with_memory.py
+import os
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+from langchain.chains import ConversationChain
+from langchain.chains.conversation.memory import ConversationBufferMemory
+
+
+def main():
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+
+    memory = ConversationBufferMemory()
+    chain = ConversationChain(llm=llm, memory=memory, verbose=True)
+
+    print("Chat with memory. Type 'exit' to quit.")
+    while True:
+        user_input = input("\nYou: ").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            break
+        response = chain.invoke({"input": user_input})
+        print("Bot:", response["response"])
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+          <p>
+            Behind the scenes, <code>ConversationBufferMemory</code> stores all previous messages and injects them
+            into the prompt on each turn.
+          </p>
+
+          <h3>3.4 Structured Outputs</h3>
+          <p>
+            Often you don’t just want free-form text; you want the model to return a structured object that your
+            code can easily consume.
+          </p>
+          <pre><code class="language-python"># src/phase1/structured_output.py
+from typing import List
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+from langchain_openai import ChatOpenAI
+
+
+class QuestionAnswer(BaseModel):
+    question: str = Field(..., description="The user question.")
+    answer: str = Field(..., description="The answer to the question.")
+    tags: List[str] = Field(
+        default_factory=list,
+        description="A few short tags summarizing the topic.",
+    )
+
+
+def main():
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+
+    structured_llm = llm.with_structured_output(QuestionAnswer)
+
+    qa = structured_llm.invoke(
+        "Explain what LangChain is and give 2–3 short tags."
+    )
+    print("Question:", qa.question)
+    print("Answer:", qa.answer)
+    print("Tags:", qa.tags)
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+          <p>
+            <code>with_structured_output</code> instructs the model (via a system prompt and tools/function-calling
+            under the hood) to return a JSON object that matches the Pydantic schema.
+          </p>
+
+          <h3>3.5 Putting It Together: A Console Chatbot with Memory &amp; a Tool</h3>
+          <p>
+            Finally, build a small console chatbot that:
+          </p>
+          <ul>
+            <li>Maintains conversation history.</li>
+            <li>Uses a calculator tool for math questions.</li>
+            <li>Returns a structured Python object per turn.</li>
+          </ul>
+          <pre><code class="language-python"># src/phase1/final_console_bot.py
+import os
+from typing import List
+
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.chains.conversation.memory import ConversationBufferMemory
+
+
+@tool
+def calculator(expression: str) -> str:
+    """Safely evaluate simple arithmetic like '2 + 2 * 3'."""
+    try:
+        result = eval(expression, {"__builtins__": {}}, {})
+        return str(result)
+    except Exception as e:
+        return f"Error: {e}"
+
+
+class BotTurn(BaseModel):
+    answer: str = Field(..., description="The main answer to the user.")
+    reasoning: str = Field(..., description="Short explanation of how the answer was derived.")
+    used_calculator: bool = Field(..., description="Whether the calculator tool was used.")
+
+
+def build_agent_with_memory():
+    load_dotenv()
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+
+    tools = [calculator]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a thoughtful assistant. Use the calculator tool for any arithmetic.",
+            ),
+            ("human", "{input}"),
+        ]
+    )
+
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
+
+    # Wrap LLM for structured output
+    structured_llm = llm.with_structured_output(BotTurn)
+    return executor, structured_llm
+
+
+def main():
+    executor, structured_llm = build_agent_with_memory()
+
+    print("Chatbot with calculator tool and structured output. Type 'exit' to quit.")
+    while True:
+        user_input = input("\nYou: ").strip()
+        if user_input.lower() in {"exit", "quit"}:
+            break
+
+        # First let the agent run (may use tools)
+        result = executor.invoke({"input": user_input})
+        text_output = result["output"]
+
+        # Then post-process via structured model
+        turn = structured_llm.invoke(
+            f"User said: {user_input}\n\nAssistant raw answer: {text_output}\n\n"
+            "Rewrite the answer if needed and provide reasoning. "
+            "Mark used_calculator=True if the answer involves numeric computation."
+        )
+
+        print("Assistant:", turn.answer)
+        print("Reasoning:", turn.reasoning)
+        print("Used calculator:", turn.used_calculator)
+
+
+if __name__ == "__main__":
+    main()</code></pre>
+
+          <div class="chapter-nav">
+            <a class="secondary" href="phase0.html">&larr; Previous: Phase 0</a>
+            <a href="phase2.html">Next: Phase 2 – LangGraph Fundamentals &rarr;</a>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>

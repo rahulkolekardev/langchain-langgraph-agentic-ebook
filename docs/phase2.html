@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Phase 2 – LangGraph Fundamentals</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div>
+        <h1>Phase 2 – LangGraph Fundamentals</h1>
+        <p class="tagline">
+          Build stateful, multi-step workflows with LangGraph: nodes, edges, state, and control flow.
+        </p>
+      </div>
+      <div class="header-controls">
+        <input
+          id="global-search"
+          type="search"
+          placeholder="Search headings in this chapter…"
+          aria-label="Search headings in this chapter"
+        />
+        <button type="button" class="theme-toggle" id="theme-toggle">
+          Toggle dark mode
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Chapters navigation">
+        <h2>Chapters</h2>
+        <ol>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="phase0.html">Phase 0 – Prerequisites &amp; Setup</a></li>
+          <li><a href="phase1.html">Phase 1 – LangChain Core &amp; LCEL</a></li>
+          <li><a href="phase2.html">Phase 2 – LangGraph Fundamentals</a></li>
+          <li><a href="phase3.html">Phase 3 – Applications &amp; Advanced</a></li>
+          <li><a href="phase4.html">Phase 4 – Advanced Agentic Systems</a></li>
+        </ol>
+      </nav>
+
+      <section class="content">
+        <article>
+          <h1>Overview</h1>
+          <p>
+            LangGraph is a framework for building <strong>stateful</strong>, <strong>long‑running</strong>,
+            and <strong>controlled</strong> LLM applications using graphs. You define nodes (functions),
+            edges (transitions), and a shared state that flows through the graph.
+          </p>
+          <p>
+            In this phase, you will:
+          </p>
+          <ul>
+            <li>Learn core LangGraph concepts: nodes, edges, state, compilation.</li>
+            <li>Wrap a RAG workflow from Phase 1 inside a LangGraph.</li>
+            <li>Use branching, loops, human‑in‑the‑loop, and persistence.</li>
+          </ul>
+
+          <div class="toc">
+            <h3>Modules in this Phase</h3>
+            <ul>
+              <li><a href="#module4">Module 4 – LangGraph Basics</a></li>
+              <li><a href="#module5">Module 5 – Control Flow, Human-in-the-loop &amp; Persistence</a></li>
+            </ul>
+          </div>
+
+          <!-- Module 4 -->
+          <h2 id="module4">Module 4 – LangGraph Basics: Nodes, Edges &amp; State</h2>
+          <p>
+            This module introduces the core abstractions in LangGraph and walks through building
+            a simple, but real, workflow graph.
+          </p>
+
+          <h3>4.1 Why LangGraph?</h3>
+          <p>
+            LCEL is great for straightforward pipelines. But as your application grows, you may need:
+          </p>
+          <ul>
+            <li>Complex branching and looping logic.</li>
+            <li>Long‑running workflows with checkpoints.</li>
+            <li>Multiple agents coordinating over shared state.</li>
+          </ul>
+          <p>
+            LangGraph is designed for this kind of orchestration. You define a graph of steps rather than a single chain.
+          </p>
+
+          <h3>4.2 Core Concepts</h3>
+          <ul>
+            <li><strong>State</strong> – a typed container (usually a dict or <code>TypedDict</code>) passed between nodes.</li>
+            <li><strong>Nodes</strong> – Python callables that take state and return an updated state.</li>
+            <li><strong>Edges</strong> – directed connections between nodes; can be conditional.</li>
+            <li><strong>Graph compilation</strong> – you define a <code>StateGraph</code> and compile it into an app.</li>
+          </ul>
+
+          <h3>4.3 Defining State</h3>
+          <p>
+            State defines what your workflow carries between steps. Using <code>TypedDict</code> or Pydantic makes this explicit:
+          </p>
+          <pre><code class="language-python"># src/phase2/basic_graph.py
+from typing import TypedDict, List
+
+class RAGState(TypedDict, total=False):
+    question: str
+    rewritten_question: str
+    retrieved_docs: List[str]
+    answer: str
+    error: str</code></pre>
+
+          <h3>4.4 Creating Nodes</h3>
+          <p>
+            Each node is a function that:
+          </p>
+          <ol>
+            <li>Accepts a <code>RAGState</code> instance.</li>
+            <li>Returns a <em>partial</em> update to <code>RAGState</code>.</li>
+          </ol>
+          <pre><code class="language-python">from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+from langchain_openai import OpenAIEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import TextLoader
+
+
+def build_rag_components():
+    loader = TextLoader("notes/course_notes.md")
+    docs = loader.load()
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=150)
+    chunks = splitter.split_documents(docs)
+
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    vectorstore = FAISS.from_documents(chunks, embedding=embeddings)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+
+    return retriever, llm</code></pre>
+          <pre><code class="language-python">from typing import List
+from langgraph.graph import StateGraph
+
+retriever, llm = build_rag_components()
+
+
+def start(state: RAGState) -> RAGState:
+    if "question" not in state or not state["question"].strip():
+        return {"error": "Question is required."}
+    return {}  # no change, we just validate
+
+
+def rewrite_query(state: RAGState) -> RAGState:
+    question = state["question"]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "Rewrite the user question to be clear and concise."),
+            ("human", "{question}"),
+        ]
+    )
+    chain = prompt | llm | StrOutputParser()
+    rewritten = chain.invoke({"question": question})
+    return {"rewritten_question": rewritten}
+
+
+def retrieve(state: RAGState) -> RAGState:
+    query = state.get("rewritten_question") or state["question"]
+    docs = retriever.get_relevant_documents(query)
+    contents = [d.page_content for d in docs]
+    return {"retrieved_docs": contents}
+
+
+def answer(state: RAGState) -> RAGState:
+    context = "\n\n".join(state.get("retrieved_docs", []))
+    question = state["question"]
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a helpful RAG assistant. Use ONLY the context. "
+                "If the answer can't be found, say you don't know.",
+            ),
+            (
+                "human",
+                "Context:\n{context}\n\nQuestion: {question}\n\nAnswer:",
+            ),
+        ]
+    )
+
+    chain = prompt | llm | StrOutputParser()
+    rag_answer = chain.invoke({"context": context, "question": question})
+    return {"answer": rag_answer}</code></pre>
+
+          <h3>4.5 Building the Graph</h3>
+          <p>
+            Now connect the nodes using a <code>StateGraph</code>:
+          </p>
+          <pre><code class="language-python">def build_graph():
+    workflow = StateGraph(RAGState)
+
+    workflow.add_node("start", start)
+    workflow.add_node("rewrite_query", rewrite_query)
+    workflow.add_node("retrieve", retrieve)
+    workflow.add_node("answer", answer)
+
+    workflow.set_entry_point("start")
+
+    workflow.add_edge("start", "rewrite_query")
+    workflow.add_edge("rewrite_query", "retrieve")
+    workflow.add_edge("retrieve", "answer")
+    workflow.set_finish_point("answer")
+
+    app = workflow.compile()
+    return app</code></pre>
+
+          <h3>4.6 Running the Graph</h3>
+          <p>
+            You can now invoke the compiled app just like an LCEL chain:
+          </p>
+          <pre><code class="language-python"># src/phase2/run_basic_graph.py
+from basic_graph import build_graph
+
+if __name__ == "__main__":
+    app = build_graph()
+    state = app.invoke({"question": "What is LangGraph?"})
+    print("Answer:\n", state["answer"])
+
+    # You can also stream state updates:
+    print("\nStreaming state transitions:\n")
+    for step in app.stream({"question": "Explain RAG in this course."}):
+        print(step)</code></pre>
+          <p>
+            The <code>.stream</code> method yields intermediate state snapshots as nodes run, which is useful for debugging.
+          </p>
+
+          <!-- Module 5 -->
+          <h2 id="module5">Module 5 – Control Flow, Agents, Human-in-the-loop &amp; Persistence</h2>
+          <p>
+            This module shows how to add branching, loops, agent-style behavior, human approval,
+            and persistence to your LangGraph workflows.
+          </p>
+
+          <h3>5.1 Conditional Edges &amp; Branching</h3>
+          <p>
+            You can branch based on state fields using <strong>conditional edges</strong>. For example, if retrieval
+            returns too few documents, you can branch to a re‑search node.
+          </p>
+          <pre><code class="language-python">from typing import Literal
+from langgraph.graph import END
+
+
+def analyze_retrieval(state: RAGState) -> RAGState:
+    docs = state.get("retrieved_docs", [])
+    if len(docs) &lt; 2:
+        return {"error": "Low retrieval confidence: not enough docs."}
+    return {}
+
+
+def decide_next(state: RAGState) -> Literal["re_search", "answer"]:
+    # Router node: based on state, choose next step
+    if state.get("error"):
+        return "re_search"
+    return "answer"
+
+
+def re_search(state: RAGState) -> RAGState:
+    # Could refine query, expand search scope, etc.
+    query = state.get("rewritten_question") or state["question"]
+    more_docs = retriever.get_relevant_documents(query + " more details")
+    contents = state.get("retrieved_docs", []) + [d.page_content for d in more_docs]
+    return {"retrieved_docs": contents, "error": ""}</code></pre>
+          <pre><code class="language-python">def build_branching_graph():
+    workflow = StateGraph(RAGState)
+
+    workflow.add_node("start", start)
+    workflow.add_node("rewrite_query", rewrite_query)
+    workflow.add_node("retrieve", retrieve)
+    workflow.add_node("analyze_retrieval", analyze_retrieval)
+    workflow.add_node("router", decide_next)
+    workflow.add_node("re_search", re_search)
+    workflow.add_node("answer", answer)
+
+    workflow.set_entry_point("start")
+    workflow.add_edge("start", "rewrite_query")
+    workflow.add_edge("rewrite_query", "retrieve")
+    workflow.add_edge("retrieve", "analyze_retrieval")
+    workflow.add_edge("analyze_retrieval", "router")
+
+    workflow.add_conditional_edges(
+        "router",
+        decide_next,
+        # If decide_next returns "re_search", go to re_search
+        {
+            "re_search": "re_search",
+            "answer": "answer",
+        },
+    )
+
+    # After re_search, go to answer and then finish
+    workflow.add_edge("re_search", "answer")
+    workflow.set_finish_point("answer")
+
+    return workflow.compile()</code></pre>
+
+          <h3>5.2 Agents with LangGraph</h3>
+          <p>
+            A <strong>simple workflow graph</strong> has a fixed sequence of nodes. An <strong>agent graph</strong>
+            contains at least one node where an LLM decides what to do next (e.g. which tool to call, or which edge to take)
+            based on the current state.
+          </p>
+          <p>
+            You can reuse a LangChain agent (from Phase 1) inside a LangGraph node. The node calls the agent executor
+            and writes the outcome into state:
+          </p>
+          <pre><code class="language-python"># src/phase2/agent_graph.py
+from typing import TypedDict, List
+
+from langchain_openai import ChatOpenAI
+from langchain_core.tools import tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langgraph.graph import StateGraph
+
+
+class AgentState(TypedDict, total=False):
+    user_input: str
+    agent_response: str
+    intermediate_steps: List[str]
+
+
+@tool
+def echo_tool(text: str) -> str:
+    """Echo the given text (example tool)."""
+    return f"Echo: {text}"
+
+
+def build_tool_agent() -> AgentExecutor:
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    tools = [echo_tool]
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", "You are an assistant that may call tools."),
+            ("human", "{input}"),
+        ]
+    )
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    return AgentExecutor(agent=agent, tools=tools, verbose=False)
+
+
+agent_executor = build_tool_agent()
+
+
+def agent_node(state: AgentState) -> AgentState:
+    """Node that delegates decision-making to a LangChain agent."""
+    result = agent_executor.invoke({"input": state["user_input"]})
+    # `result` may contain `output` and `intermediate_steps` depending on the agent type
+    response = result.get("output", "")
+    steps = [str(step) for step in result.get("intermediate_steps", [])]
+    return {"agent_response": response, "intermediate_steps": steps}
+
+
+def build_agent_graph():
+    workflow = StateGraph(AgentState)
+    workflow.add_node("agent", agent_node)
+    workflow.set_entry_point("agent")
+    workflow.set_finish_point("agent")
+    return workflow.compile()</code></pre>
+          <p>
+            In a more complex agent graph, the agent node could inspect tools’ results in <code>state</code>
+            and choose which edge to follow next (similar to the router pattern in 5.1, but driven by LLM output).
+          </p>
+
+          <h3>5.3 Loops &amp; Retries</h3>
+          <p>
+            You can create loops by adding edges that point back to earlier nodes. For example,
+            attempt retrieval up to N times before giving up.
+          </p>
+          <pre><code class="language-python">class LoopState(RAGState, total=False):
+    attempts: int
+
+
+MAX_ATTEMPTS = 3
+
+
+def increment_attempts(state: LoopState) -> LoopState:
+    attempts = state.get("attempts", 0) + 1
+    return {"attempts": attempts}
+
+
+def decide_retry(state: LoopState) -> str:
+    if len(state.get("retrieved_docs", [])) &lt; 1 and state.get("attempts", 0) &lt; MAX_ATTEMPTS:
+        return "retry"
+    return "continue"</code></pre>
+          <pre><code class="language-python">from langgraph.graph import StateGraph
+
+
+def build_loop_graph():
+    workflow = StateGraph(LoopState)
+
+    workflow.add_node("start", start)
+    workflow.add_node("rewrite_query", rewrite_query)
+    workflow.add_node("retrieve", retrieve)
+    workflow.add_node("increment_attempts", increment_attempts)
+    workflow.add_node("decide_retry", decide_retry)
+    workflow.add_node("answer", answer)
+
+    workflow.set_entry_point("start")
+    workflow.add_edge("start", "rewrite_query")
+    workflow.add_edge("rewrite_query", "increment_attempts")
+    workflow.add_edge("increment_attempts", "retrieve")
+    workflow.add_edge("retrieve", "decide_retry")
+
+    workflow.add_conditional_edges(
+        "decide_retry",
+        decide_retry,
+        {
+            "retry": "increment_attempts",
+            "continue": "answer",
+        },
+    )
+
+    workflow.set_finish_point("answer")
+    return workflow.compile()</code></pre>
+          <p>
+            This pattern is useful for robust agents that can retry failed steps or refine queries.
+          </p>
+
+          <h3>5.4 Human in the Loop &amp; Checkpoints</h3>
+          <p>
+            One of LangGraph’s strengths is supporting <strong>pauses</strong> and <strong>checkpoints</strong> so
+            humans can review or approve actions (e.g. sending an email or making a trade).
+          </p>
+          <p>
+            Conceptually:
+          </p>
+          <ol>
+            <li>Graph runs until a node decides to pause.</li>
+            <li>State is persisted at a checkpoint.</li>
+            <li>A human reviews the state and resumes the graph from that point.</li>
+          </ol>
+          <p>
+            A minimal pattern looks like this (actual pause/resume wiring depends on the runtime you use):
+          </p>
+          <pre><code class="language-python">from langgraph.graph import StateGraph, END
+
+class ApprovalState(TypedDict, total=False):
+    draft_answer: str
+    approved: bool
+    question: str
+
+
+def draft_answer(state: ApprovalState) -> ApprovalState:
+    # Use an LLM to create a draft (similar to earlier answer node)
+    # For brevity, imagine we have llm and prompt already defined
+    draft = "Draft answer using context and question..."
+    return {"draft_answer": draft, "approved": False}
+
+
+def require_human_approval(state: ApprovalState) -> ApprovalState:
+    # In a real app, this would pause and wait for human input.
+    # Here we simulate requiring approval by leaving `approved` as False.
+    return {}
+
+
+def send_final_answer(state: ApprovalState) -> ApprovalState:
+    if not state.get("approved"):
+        return {"draft_answer": state["draft_answer"] + "\n\n(NOT APPROVED YET)"}
+    # Send via email / API / UI, etc.
+    return state</code></pre>
+          <p>
+            You would then wire these nodes into a graph, and use LangGraph’s checkpointing
+            integration to persist <code>ApprovalState</code> in a database. When a human approves,
+            you set <code>approved=True</code> and resume the graph from the saved checkpoint.
+          </p>
+
+          <h3>5.5 Persistence &amp; Long-running Sessions</h3>
+          <p>
+            For serious applications, you don’t want to lose state when the process exits.
+            LangGraph supports pluggable checkpointers (e.g. in memory, file, or database).
+          </p>
+          <p>
+            The exact APIs evolve over time, but the high-level pattern is:
+          </p>
+          <ul>
+            <li>Configure a checkpointer when compiling your graph.</li>
+            <li>Each run of the graph is associated with a <em>thread id</em> or similar session id.</li>
+            <li>When you resume, you pass the same id and the graph continues from the last checkpoint.</li>
+          </ul>
+
+          <div class="note warning">
+            This ebook focuses on concepts and basic usage patterns. When you move to production,
+            consult the latest LangGraph docs for the preferred persistence and checkpointing APIs.
+          </div>
+
+          <div class="chapter-nav">
+            <a class="secondary" href="phase1.html">&larr; Previous: Phase 1</a>
+            <a href="phase3.html">Next: Phase 3 – Applications &amp; Advanced &rarr;</a>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
